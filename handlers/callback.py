@@ -706,7 +706,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("awaiting_feedback_text", None)
 
         # Отправляем отзыв владельцу бота
-        OWNER_ID = "your id"
+        OWNER_ID = 1225488154
         user_name = update.effective_user.full_name
         user_username = update.effective_user.username or "не указан"
         await context.bot.send_message(
@@ -832,3 +832,4 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # отмечаем задание как решенное
 
         context.user_data["p1_done"].add(task_number)
+
