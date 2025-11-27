@@ -1,6 +1,8 @@
 import os
+from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, MessageHandler, filters
+from telegram.ext import CommandHandler, ContextTypes, ApplicationBuilder
 from config import (
     IMAGES_FOLDER, IMAGES_FOLDER2, ANSWERS_FOLDER, ANSWERS_FOLDER2,
     PDF_FOLDER, tasks_data, learning_materials, answers, answers_files, PDF_FOLDER2, PDF_FOLDER3
@@ -13,6 +15,8 @@ MAIN_MENU_KEYBOARD = InlineKeyboardMarkup([
 
 # Баллы для заданий
 TASK_POINTS = {**{i: 1 for i in range(1, 13)}, 13: 2, 14: 3, 15: 2, 16: 2, 17: 3, 18: 4, 19: 4}
+
+
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -272,7 +276,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(path, "rb") as f:
             await query.message.reply_photo(f)
 
-        keyboard = [[InlineKeyboardButton("Ответить", callback_data="weekly_task_answer")],]
+        keyboard = [[InlineKeyboardButton("Ответить", callback_data="weekly_task_answer")]]
         await query.message.reply_text(
             f"⭐ Задача недели\n⏱ До конца недели осталось: {time_remaining.days} дней, {hours} часов, {minutes} минут",
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -830,6 +834,158 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["p1_answers"][task_number] = user_answer
 
         # отмечаем задание как решенное
-
         context.user_data["p1_done"].add(task_number)
 
+# Главное меню
+async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("📘 Обучение", callback_data='learning')],
+        [InlineKeyboardButton("📝 Экзамен", callback_data='ekzamen')],
+        [InlineKeyboardButton("📊 Топ экзамена", callback_data='exam_top')],
+        [InlineKeyboardButton("📊 Топ недели", callback_data='weekly_top')],
+        [InlineKeyboardButton("⭐ Задача недели", callback_data="weekly_task")],
+        [InlineKeyboardButton("💯 Отзывы", callback_data='show_feedback')]
+    ]
+    await update.message.reply_text(
+        "🏠 Главное меню:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# Экзамен
+async def cmd_ekzamen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("Профильная математика", callback_data="exam_profile")],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+    ]
+    await update.message.reply_text(
+        "Выберите предмет для экзамена:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# Теория
+async def cmd_theory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("1 часть", callback_data='theory_part1')],
+        [InlineKeyboardButton("2 часть", callback_data='theory_part2')],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+    ]
+    await update.message.reply_text(
+        "Выберите часть теории:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# Практика
+async def cmd_practice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("1 часть", callback_data='learning_practice_Matematika_part1')],
+        [InlineKeyboardButton("2 часть", callback_data='learning_practice_Matematika_part2')],
+        [InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]
+    ]
+    await update.message.reply_text(
+        "Выберите часть практики:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# Задача недели
+async def cmd_weekly_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from datetime import datetime, timedelta
+    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+    start_date = context.bot_data.get("bot_start_date", datetime.now())
+    days_passed = (datetime.now() - start_date).days
+    week_index = days_passed // 7
+
+    folder = "weekly_task"
+    available = sorted(f for f in os.listdir(folder) if f.startswith("week") and f.endswith(".png"))
+    if not available:
+        await update.message.reply_text("Задачи недели пока не добавлены.", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    filename = available[week_index % len(available)]
+    path = os.path.join(folder, filename)
+
+    now = datetime.now()
+    days_until_sunday = 6 - now.weekday()
+    end_of_week = datetime(year=now.year, month=now.month, day=now.day,
+                           hour=23, minute=59, second=59) + timedelta(days=days_until_sunday)
+    time_remaining = end_of_week - now
+    hours, remainder = divmod(time_remaining.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    context.user_data["weekly_task"] = {
+        "filename": filename,
+        "attempts": 3,
+        "start_time": datetime.now()
+    }
+
+    with open(path, "rb") as f:
+        await update.message.reply_photo(f)
+
+    keyboard = [[InlineKeyboardButton("Ответить", callback_data="weekly_task_answer")]]
+    await update.message.reply_text(
+        f"⭐ Задача недели\n⏱ До конца недели осталось: {time_remaining.days} дней, {hours} часов, {minutes} минут",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+# Топ экзамена
+async def cmd_exam_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+    results = context.bot_data.get("exam_results", {})
+    if not results:
+        await update.message.reply_text("Пока нет результатов экзамена.", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    top_users = sorted(results.values(), key=lambda x: x["score"], reverse=True)[:10]
+    message = "🏆 Топ 10 пользователей по экзамену:\n\n"
+    for i, user in enumerate(top_users, 1):
+        message += f"{i}. {user['name']} — {user['score']} баллов\n"
+    await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+# Топ недели
+async def cmd_weekly_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from datetime import datetime
+    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+    start_date = context.bot_data.get("bot_start_date", datetime.now())
+    days_passed = (datetime.now() - start_date).days
+    week_index = days_passed // 7
+
+    week_file = f"week{week_index % 4 + 1}.png"
+    top_list = context.bot_data.get("weekly_top", {}).get(week_file, [])
+    if not top_list:
+        await update.message.reply_text("Пока никто не решил эту задачу недели.", reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    def parse_time(t):
+        minutes, seconds = map(int, t.replace(" сек", "").split(" мин "))
+        return minutes * 60 + seconds
+
+    top_list_sorted = sorted(top_list, key=lambda x: parse_time(x["time"]))[:10]
+    message = "🏆 Топ 10 недели:\n\n"
+    for i, user in enumerate(top_list_sorted, 1):
+        message += f"{i}. {user['username']} — {user['time']}\n"
+    await update.message.reply_text(message, reply_markup=InlineKeyboardMarkup(keyboard))
+
+# Отзывы
+async def cmd_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="main_menu")]]
+    feedbacks = context.bot_data.get("all_feedbacks", [])
+    if feedbacks:
+        average = sum(feedbacks) / len(feedbacks)
+        await update.message.reply_text(f"Средняя оценка бота: {average:.2f}/5 ⭐", reply_markup=InlineKeyboardMarkup(keyboard))
+    else:
+        await update.message.reply_text("Пока нет оценок.", reply_markup=InlineKeyboardMarkup(keyboard))
+
+app = ApplicationBuilder().token("8579753971:AAF4Uu9mbCSiUEydp5YY0RLjSVzt3egHIv8").build()
+
+app.add_handler(CommandHandler("menu", cmd_menu))
+app.add_handler(CommandHandler("exam", cmd_ekzamen))
+app.add_handler(CommandHandler("theory", cmd_theory))
+app.add_handler(CommandHandler("practice", cmd_practice))
+app.add_handler(CommandHandler("weekly_task", cmd_weekly_task))
+app.add_handler(CommandHandler("exam_top", cmd_exam_top))
+app.add_handler(CommandHandler("weekly_top", cmd_weekly_top))
+app.add_handler(CommandHandler("feedback", cmd_feedback))
+
+# твой CallbackQueryHandler
+# app.add_handler(CallbackQueryHandler(handle_callback))
+
+app.run_polling()
