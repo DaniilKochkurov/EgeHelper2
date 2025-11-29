@@ -98,11 +98,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("theory_topic_"):
         number = int(data.split("_")[-1])
-        filename = f"Teoria_k_zadaniyu_{number}.pdf"
-        path = os.path.join("teory1", filename)
+        filename1 = f"Teoria_k_zadaniyu_{number}.pdf"
+        path = os.path.join("teory1", filename1)
         if os.path.exists(path):
             with open(path, "rb") as f:
-                await query.message.reply_document(document=f, filename=filename)
+                await query.message.reply_document(document=f, filename=filename1)
         else:
             await query.message.reply_text(f"Файл с теорией для задания {number} не найден.", reply_markup=MAIN_MENU_KEYBOARD)
         return
@@ -989,6 +989,7 @@ app.add_handler(CommandHandler("feedback", cmd_feedback))
 # app.add_handler(CallbackQueryHandler(handle_callback))
 
 app.run_polling()
+
 
 
 
